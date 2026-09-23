@@ -137,6 +137,9 @@ window.FIREBASE_CONFIG = {
 
 <dialog id="syncDlg">
   <h3>Sync</h3>
+  <label for="myLink">Your personal link</label>
+  <input type="text" id="myLink" class="code" readonly style="font-size:.8rem">
+  <p class="note">Use this exact link everywhere: your Notion embed, your phone's home screen, your bookmarks. It always opens your tracker, even if a device forgets its settings. Keep it private.</p>
   <label for="myCode">This device's sync code</label>
   <input type="text" id="myCode" class="code" readonly>
   <p class="note">On your other device, open Sync settings and enter this code. Keep it private: anyone with it can see and edit your tracker.</p>
@@ -243,14 +246,22 @@ function attach(sDoc,iDoc){
 }
 function newCode(){const a="abcdefghjkmnpqrstuvwxyz23456789";let c="";const r=crypto.getRandomValues(new Uint8Array(24));r.forEach(b=>c+=a[b%a.length]);return c.match(/.{4}/g).join("-")}
 let fs=null;
+function personalLink(code){return location.origin+location.pathname+"#c="+code}
+function rememberCode(code){
+  try{localStorage.setItem(LSC,code)}catch(e){}
+  try{history.replaceState(null,"",location.pathname+location.search+"#c="+code)}catch(e){}
+}
 function fbDocs(code){const col=fs.collection("trackers");return [col.doc(code),col.doc(code+"-icons")]}
 (async function connect(){
   const cfg=window.FIREBASE_CONFIG;
   if(cfg&&cfg.apiKey&&window.firebase){
     try{
       firebase.initializeApp(cfg); fs=firebase.firestore();
-      let code=null; try{code=localStorage.getItem(LSC)}catch(e){}
-      if(!code){code=newCode(); try{localStorage.setItem(LSC,code)}catch(e){}}
+      const m=location.hash.match(/c=([a-z0-9]{4}(?:-[a-z0-9]{4}){5})/);
+      let code=m?m[1]:null;
+      if(!code){try{code=localStorage.getItem(LSC)}catch(e){}}
+      if(!code)code=newCode();
+      rememberCode(code);
       syncedMsg="Synced"; $("syncBtn").style.display="inline-block";
       attach(...fbDocs(code)); return;
     }catch(e){console.error(e)}
@@ -262,9 +273,10 @@ function fbDocs(code){const col=fs.collection("trackers");return [col.doc(code),
 })();
 $("syncBtn").onclick=()=>{
   let c="";try{c=localStorage.getItem(LSC)||""}catch(e){}
-  $("myCode").value=c; $("joinCode").value=""; $("joinErr").style.display="none"; $("syncDlg").showModal();
+  $("myCode").value=c; $("myLink").value=c?personalLink(c):""; $("joinCode").value=""; $("joinErr").style.display="none"; $("syncDlg").showModal();
 };
 $("myCode").onfocus=e=>e.target.select();
+$("myLink").onfocus=e=>e.target.select();
 $("syncClose").onclick=()=>$("syncDlg").close();
 $("joinBtn").onclick=async()=>{
   const code=$("joinCode").value.trim().toLowerCase().replace(/\s+/g,"");
@@ -276,7 +288,7 @@ $("joinBtn").onclick=async()=>{
     const snap=await sDoc.get();
     if(!snap.exists)return err("No tracker found with that code. Check it and try again.");
     clearTimeout(pending); dirty=false; iconDirty=false;
-    try{localStorage.setItem(LSC,code)}catch(e){}
+    rememberCode(code);
     state=Object.assign({habits:[],log:{}},snap.data()); icons={};
     try{localStorage.setItem(LS,JSON.stringify(state));localStorage.removeItem(LSI)}catch(e){}
     attach(sDoc,iDoc); render(); $("syncDlg").close();

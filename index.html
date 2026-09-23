@@ -212,7 +212,7 @@ async function flush(){
     setSync(syncedMsg);
   }catch(e){
     if(e&&e.code==="quota_exceeded")setSync("Storage is full. Remove a picture icon to keep syncing.");
-    else setSync("Saved on this device. Sync will retry.");
+    else setSync("Not synced: "+((e&&e.code)||"connection error")+". Retrying.");
     dirty=true;
   }finally{writing=false; if(dirty||iconDirty){clearTimeout(pending);pending=setTimeout(flush,3000)}}
 }
@@ -229,8 +229,11 @@ function attach(sDoc,iDoc){
     if(snap.exists){
       if(!dirty&&!writing){state=Object.assign({habits:[],log:{}},snap.data());
         try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){} render()}
-    }else if(first&&state.habits.length){dirty=true;flush()}
-    first=false; setSync(syncedMsg);
+    }else if(first){dirty=true;flush()}   // create the tracker right away so other devices can link to it
+    const fromServer=!(snap.metadata&&snap.metadata.fromCache);
+    if(snap.exists&&fromServer&&!dirty)setSync(syncedMsg);
+    else if(!snap.exists&&!fromServer)setSync("Connecting…");
+    first=false;
   },()=>setSync("Saved on this device. Sync is offline.")));
   unsubs.push(iconDoc.onSnapshot(snap=>{
     if(snap.exists){if(!iconDirty&&!writing){icons=Object.assign({},snap.data());render()}}

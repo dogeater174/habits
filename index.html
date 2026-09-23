@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Habit Circles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5FA; --surface:#FFFFFF; --ink:#1C2230; --muted:#6B7385; --line:#E2E6EF; --track:#E7EAF2;
+  --focus:#3D6BFF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12151C; --surface:#1B1F29; --ink:#EEF1F7; --muted:#9AA2B4; --line:#2A303D; --track:#2A303D; --focus:#7C9BFF;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12151C; --surface:#1B1F29; --ink:#EEF1F7; --muted:#9AA2B4; --line:#2A303D; --track:#2A303D; --focus:#7C9BFF;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Fredoka",ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-tap-highlight-color:transparent}
+.wrap{max-width:720px;margin:0 auto;padding:18px 16px 28px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+.day{display:flex;align-items:center;gap:6px}
+.day h1{font-size:1.35rem;font-weight:600;margin:0;min-width:7.5em;text-align:center}
+.icon-btn{border:0;background:var(--surface);color:var(--ink);width:36px;height:36px;border-radius:50%;
+  font:inherit;font-size:1.1rem;cursor:pointer;display:grid;place-items:center}
+.icon-btn:disabled{opacity:.35;cursor:default}
+.text-btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:18px;
+  padding:7px 14px;font:inherit;font-size:.95rem;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.circles{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:18px 10px;
+  background:var(--surface);border-radius:28px;padding:22px 12px 18px}
+.habit{display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+.ring{position:relative;width:84px;height:84px;border:0;padding:0;background:none;cursor:pointer;
+  border-radius:50%;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.ring svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring .track{stroke:var(--track)}
+.ring .prog{transition:stroke-dashoffset .35s cubic-bezier(.3,1.4,.5,1)}
+.inner{position:absolute;inset:9px;border-radius:50%;display:grid;place-items:center;overflow:hidden;
+  font-size:1.9rem;transition:background .3s, transform .15s}
+.inner img{width:100%;height:100%;object-fit:cover}
+.ring:active .inner{transform:scale(.92)}
+.done .inner{box-shadow:inset 0 0 0 3px var(--c)}
+.badge{position:absolute;right:-2px;bottom:-2px;background:var(--c);color:#fff;font-size:.72rem;font-weight:600;
+  min-width:24px;height:24px;border-radius:12px;display:grid;place-items:center;padding:0 6px;
+  border:2px solid var(--surface)}
+.name{font-size:.88rem;color:var(--ink);text-align:center;max-width:96px;line-height:1.2;word-break:break-word}
+.del{position:absolute;top:-4px;right:6px;width:26px;height:26px;border-radius:50%;border:0;background:#E5484D;
+  color:#fff;font-size:1rem;cursor:pointer;display:none}
+.editing .del{display:block}
+.del.armed{width:auto;border-radius:13px;padding:0 9px;font-size:.75rem;right:-6px;z-index:2}
+.editing .ring{animation:wiggle .35s ease-in-out infinite alternate}
+@keyframes wiggle{from{transform:rotate(-2deg)}to{transform:rotate(2deg)}}
+.add-tile .inner{background:var(--bg);color:var(--muted);font-size:2rem;border:2px dashed var(--line)}
+.hint{color:var(--muted);font-size:.85rem;text-align:center;margin:10px 0 0}
+
+h2{font-size:1.05rem;font-weight:500;margin:24px 4px 10px;display:flex;justify-content:space-between;align-items:baseline}
+h2 span{color:var(--muted);font-size:.9rem;font-weight:400}
+.week{background:var(--surface);border-radius:22px;padding:14px 12px;overflow-x:auto}
+table{border-collapse:separate;border-spacing:0 8px;width:100%;min-width:380px}
+th{font-weight:400;color:var(--muted);font-size:.8rem;padding:0 2px}
+th.today{color:var(--ink);font-weight:600}
+td{text-align:center;padding:0 2px}
+td.label{text-align:left;font-size:.88rem;white-space:nowrap;padding-right:8px;max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.dot{width:26px;height:26px;border-radius:50%;margin:0 auto;display:block}
+td.pct{font-size:.8rem;color:var(--muted);padding-left:6px}
+
+dialog{border:0;border-radius:24px;background:var(--surface);color:var(--ink);padding:20px;width:min(360px,92vw)}
+dialog::backdrop{background:rgba(10,14,22,.45)}
+dialog h3{margin:0 0 14px;font-weight:600}
+label{display:block;font-size:.85rem;color:var(--muted);margin:12px 0 5px}
+input[type=text],input[type=number]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);font:inherit}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:30px;height:30px;border-radius:50%;border:3px solid transparent;cursor:pointer}
+.sw[aria-pressed="true"]{border-color:var(--ink)}
+.icon-row{display:flex;gap:10px;align-items:center}
+.preview{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-size:1.6rem;overflow:hidden;flex:none}
+.preview img{width:100%;height:100%;object-fit:cover}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.primary{background:var(--ink);color:var(--surface);border:0;border-radius:18px;padding:9px 18px;font:inherit;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+.sync{font-size:.75rem;color:var(--muted);text-align:center;margin-top:16px}
+@media (prefers-reduced-motion: reduce){.ring .prog,.inner{transition:none}.editing .ring{animation:none}}
+.sync-row{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:16px}
+.sync-row .sync{margin:0}
+#syncBtn{display:none;font-size:.8rem;padding:5px 12px}
+.code{font-family:inherit;font-size:1.05rem;letter-spacing:.04em;text-align:center}
+.note{font-size:.82rem;color:var(--muted);margin:8px 0 0;line-height:1.4}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ===== PASTE YOUR FIREBASE CONFIG BELOW (replace the whole {...}) ===== */
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBI97xBp_87LFCpTlCC9u9W-OJbFoM1QbA",
+  authDomain: "habits-36064.firebaseapp.com",
+  databaseURL: "https://habits-36064-default-rtdb.firebaseio.com",
+  projectId: "habits-36064",
+  storageBucket: "habits-36064.firebasestorage.app",
+  messagingSenderId: "614218790243",
+  appId: "1:614218790243:web:3faa7f4bd4f60eac32cf56",
+  measurementId: "G-ZCW9XB3H2H"
+};
+/* ====================================================================== */
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="day">
+      <button class="icon-btn" id="prev" aria-label="Previous day">‹</button>
+      <h1 id="dayLabel">Today</h1>
+      <button class="icon-btn" id="next" aria-label="Next day">›</button>
+    </div>
+    <button class="text-btn" id="editBtn">Edit</button>
+  </header>
+
+  <section id="circles" class="circles" aria-label="Habits"></section>
+  <p class="hint" id="hint">Tap a circle to log it. Press and hold to undo one.</p>
+
+  <h2>This week <span id="weekLabel"></span></h2>
+  <div class="week"><table id="weekTable"></table></div>
+  <div class="sync-row"><p class="sync" id="sync"></p><button class="text-btn" id="syncBtn">Sync settings</button></div>
+</div>
+
+<dialog id="syncDlg">
+  <h3>Sync</h3>
+  <label for="myCode">This device's sync code</label>
+  <input type="text" id="myCode" class="code" readonly>
+  <p class="note">On your other device, open Sync settings and enter this code. Keep it private: anyone with it can see and edit your tracker.</p>
+  <label for="joinCode">Link to a code from another device</label>
+  <input type="text" id="joinCode" class="code" placeholder="Paste code">
+  <p id="joinErr" class="note" style="color:#E5484D;display:none"></p>
+  <div class="actions">
+    <button type="button" class="text-btn" id="syncClose">Close</button>
+    <button type="button" class="primary" id="joinBtn">Link device</button>
+  </div>
+</dialog>
+
+<dialog id="dlg">
+  <div id="form">
+    <h3 id="dlgTitle">New habit</h3>
+    <label for="fName">Name</label>
+    <input type="text" id="fName" maxlength="24" placeholder="Drink water">
+    <p id="fErr" style="color:#E5484D;font-size:.8rem;margin:6px 0 0;display:none">Give the habit a name.</p>
+    <label for="fTarget">Times per day</label>
+    <input type="number" id="fTarget" min="1" max="30" value="1">
+    <label>Color</label>
+    <div class="swatches" id="swatches"></div>
+    <label for="fEmoji">Icon: an emoji, or upload a picture</label>
+    <div class="icon-row">
+      <div class="preview" id="preview">✨</div>
+      <input type="text" id="fEmoji" maxlength="4" value="✨" style="width:70px;text-align:center">
+      <button type="button" class="text-btn" id="pickImg">Upload</button>
+      <input type="file" id="fImg" accept="image/*" hidden>
+    </div>
+    <div class="actions">
+      <button type="button" class="text-btn" id="cancel">Cancel</button>
+      <button type="button" class="primary" id="save">Save habit</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function(){
+const COLORS=["#FF6B6B","#FF9F43","#F7C948","#2EC4B6","#3D9BFF","#7C6CFF","#E86ACF","#6BCB77"];
+const SUGGEST=[["Drink water","💧",8,"#3D9BFF"],["Read","📖",1,"#7C6CFF"],["Workout","💪",1,"#FF6B6B"],["Stretch","🧘",2,"#2EC4B6"],["Anki","🧠",1,"#F7C948"]];
+const LS="habitCircles.v1", LSI="habitCircles.icons.v1";
+let state={habits:[],log:{}};   // log: {"YYYY-MM-DD": {habitId: count}}
+let icons={};                   // {habitId: dataURL}
+let viewDate=startOfDay(new Date());
+let editing=false, editId=null, draftImg=null, draftColor=COLORS[0];
+let stateDoc=null, iconDoc=null, pending=null, writing=false, dirty=false, iconDirty=false;
+
+try{const s=JSON.parse(localStorage.getItem(LS)||"null");if(s&&s.habits)state=s}catch(e){}
+try{const s=JSON.parse(localStorage.getItem(LSI)||"null");if(s)icons=s}catch(e){}
+
+function startOfDay(d){const x=new Date(d);x.setHours(0,0,0,0);return x}
+function key(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function monday(d){const x=startOfDay(d);const w=(x.getDay()+6)%7;return addDays(x,-w)}
+function count(dk,id){return (state.log[dk]&&state.log[dk][id])||0}
+function uid(){return Math.random().toString(36).slice(2,9)}
+function $(id){return document.getElementById(id)}
+function tint(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`}
+
+/* ---------- persistence ---------- */
+function persist(icon){
+  try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}
+  if(icon){try{localStorage.setItem(LSI,JSON.stringify(icons))}catch(e){}}
+  dirty=true; if(icon)iconDirty=true;
+  clearTimeout(pending); pending=setTimeout(flush,500);
+}
+async function flush(){
+  if(!stateDoc||writing)return;
+  writing=true;
+  try{
+    if(dirty){dirty=false;await stateDoc.set(JSON.parse(JSON.stringify(state)))}
+    if(iconDirty){iconDirty=false;await iconDoc.set(JSON.parse(JSON.stringify(icons)))}
+    setSync(syncedMsg);
+  }catch(e){
+    if(e&&e.code==="quota_exceeded")setSync("Storage is full. Remove a picture icon to keep syncing.");
+    else setSync("Saved on this device. Sync will retry.");
+    dirty=true;
+  }finally{writing=false; if(dirty||iconDirty){clearTimeout(pending);pending=setTimeout(flush,3000)}}
+}
+function setSync(t){$("sync").textContent=t}
+setSync("Saved on this device");
+
+let unsubs=[], syncedMsg="Synced across your devices";
+const LSC="habitCircles.syncCode";
+function attach(sDoc,iDoc){
+  unsubs.forEach(u=>{try{u()}catch(e){}}); unsubs=[];
+  stateDoc=sDoc; iconDoc=iDoc;
+  let first=true, firstI=true;
+  unsubs.push(stateDoc.onSnapshot(snap=>{
+    if(snap.exists){
+      if(!dirty&&!writing){state=Object.assign({habits:[],log:{}},snap.data());
+        try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){} render()}
+    }else if(first&&state.habits.length){dirty=true;flush()}
+    first=false; setSync(syncedMsg);
+  },()=>setSync("Saved on this device. Sync is offline.")));
+  unsubs.push(iconDoc.onSnapshot(snap=>{
+    if(snap.exists){if(!iconDirty&&!writing){icons=Object.assign({},snap.data());render()}}
+    else if(firstI&&Object.keys(icons).length){iconDirty=true;flush()}
+    firstI=false;
+  },()=>{}));
+}
+function newCode(){const a="abcdefghjkmnpqrstuvwxyz23456789";let c="";const r=crypto.getRandomValues(new Uint8Array(24));r.forEach(b=>c+=a[b%a.length]);return c.match(/.{4}/g).join("-")}
+let fs=null;
+function fbDocs(code){const col=fs.collection("trackers");return [col.doc(code),col.doc(code+"-icons")]}
+(async function connect(){
+  const cfg=window.FIREBASE_CONFIG;
+  if(cfg&&cfg.apiKey&&window.firebase){
+    try{
+      firebase.initializeApp(cfg); fs=firebase.firestore();
+      let code=null; try{code=localStorage.getItem(LSC)}catch(e){}
+      if(!code){code=newCode(); try{localStorage.setItem(LSC,code)}catch(e){}}
+      syncedMsg="Synced"; $("syncBtn").style.display="inline-block";
+      attach(...fbDocs(code)); return;
+    }catch(e){console.error(e)}
+  }
+  if(!window.claude||!window.claude.use)return;
+  let db=null; try{db=await window.claude.use("db")}catch(e){}
+  if(!db)return;
+  attach(db.doc("tracker/state"),db.doc("tracker/icons"));
+})();
+$("syncBtn").onclick=()=>{
+  let c="";try{c=localStorage.getItem(LSC)||""}catch(e){}
+  $("myCode").value=c; $("joinCode").value=""; $("joinErr").style.display="none"; $("syncDlg").showModal();
+};
+$("myCode").onfocus=e=>e.target.select();
+$("syncClose").onclick=()=>$("syncDlg").close();
+$("joinBtn").onclick=async()=>{
+  const code=$("joinCode").value.trim().toLowerCase().replace(/\s+/g,"");
+  const err=t=>{$("joinErr").textContent=t;$("joinErr").style.display="block"};
+  if(!/^[a-z0-9]{4}(-[a-z0-9]{4}){5}$/.test(code))return err("That doesn't look like a sync code. It should be six groups of four characters.");
+  $("joinBtn").disabled=true;
+  try{
+    const [sDoc,iDoc]=fbDocs(code);
+    const snap=await sDoc.get();
+    if(!snap.exists)return err("No tracker found with that code. Check it and try again.");
+    clearTimeout(pending); dirty=false; iconDirty=false;
+    try{localStorage.setItem(LSC,code)}catch(e){}
+    state=Object.assign({habits:[],log:{}},snap.data()); icons={};
+    try{localStorage.setItem(LS,JSON.stringify(state));localStorage.removeItem(LSI)}catch(e){}
+    attach(sDoc,iDoc); render(); $("syncDlg").close();
+  }catch(e){err("Couldn't reach the sync server. Check your connection and try again.")}
+  finally{$("joinBtn").disabled=false}
+};
+
+/* ---------- rendering ---------- */
+function iconHTML(h){
+  return icons[h.id]?`<img src="${icons[h.id]}" alt="">`:`<span aria-hidden="true">${escapeHTML(h.emoji||"✨")}</span>`;
+}
+function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+function render(){
+  const today=startOfDay(new Date());
+  const dk=key(viewDate);
+  const diff=Math.round((viewDate-today)/864e5);
+  $("dayLabel").textContent=diff===0?"Today":diff===-1?"Yesterday":viewDate.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+  $("next").disabled=diff>=0;
+  $("editBtn").textContent=editing?"Done":"Edit";
+
+  const wrap=$("circles"); wrap.classList.toggle("editing",editing); wrap.innerHTML="";
+  const R=38, C=2*Math.PI*R;
+  state.habits.forEach(h=>{
+    const n=count(dk,h.id), t=h.target||1, p=Math.min(n/t,1), done=n>=t;
+    const el=document.createElement("div");
+    el.className="habit"+(done?" done":""); el.style.setProperty("--c",h.color);
+    el.innerHTML=`
+      <button class="ring" aria-label="${escapeHTML(h.name)}: ${n} of ${t}">
+        <svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="${R}" fill="none" stroke-width="7"/>
+        <circle class="prog" cx="42" cy="42" r="${R}" fill="none" stroke="${h.color}" stroke-width="7" stroke-linecap="round"
+          stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p)}"/></svg>
+        <div class="inner" style="background:${tint(h.color,done?.9:.16)}">${iconHTML(h)}</div>
+        ${t>1||n>t?`<span class="badge">${n}/${t}</span>`:""}
+      </button>
+      <div class="name">${escapeHTML(h.name)}</div>
+      <button class="del" aria-label="Delete ${escapeHTML(h.name)}">×</button>`;
+    const ring=el.querySelector(".ring");
+    bindPress(ring,()=>{ if(editing){openDialog(h.id);return} bump(h.id,1)},()=>{ if(!editing)bump(h.id,-1)});
+    const delBtn=el.querySelector(".del"); delBtn.onclick=()=>removeHabit(h.id,delBtn);
+    wrap.appendChild(el);
+  });
+
+  const add=document.createElement("div"); add.className="habit add-tile";
+  add.innerHTML=`<button class="ring" aria-label="Add habit"><div class="inner">+</div></button><div class="name">Add habit</div>`;
+  add.querySelector(".ring").onclick=()=>openDialog(null);
+  wrap.appendChild(add);
+
+  if(!state.habits.length){
+    const chips=document.createElement("div"); chips.className="chips"; chips.style.gridColumn="1/-1";
+    SUGGEST.forEach(([name,emoji,target,color])=>{
+      const b=document.createElement("button"); b.className="text-btn"; b.textContent=emoji+" "+name;
+      b.onclick=()=>{state.habits.push({id:uid(),name,emoji,target,color});persist();render()};
+      chips.appendChild(b);
+    });
+    wrap.appendChild(chips);
+  }
+  $("hint").textContent=editing?"Tap a circle to change it. Tap × twice to delete it.":"Tap a circle to log it. Press and hold to undo one.";
+  renderWeek(today);
+}
+
+function renderWeek(today){
+  const m=monday(viewDate), days=[...Array(7)].map((_,i)=>addDays(m,i));
+  $("weekLabel").textContent=days[0].toLocaleDateString(undefined,{month:"short",day:"numeric"})+" – "+days[6].toLocaleDateString(undefined,{month:"short",day:"numeric"});
+  let html="<thead><tr><th></th>"+days.map(d=>`<th class="${key(d)===key(viewDate)?"today":""}">${d.toLocaleDateString(undefined,{weekday:"narrow"})}<br>${d.getDate()}</th>`).join("")+"<th></th></tr></thead><tbody>";
+  state.habits.forEach(h=>{
+    let hit=0, counted=0;
+    html+=`<tr><td class="label">${escapeHTML(h.emoji||"")} ${escapeHTML(h.name)}</td>`;
+    days.forEach(d=>{
+      const n=count(key(d),h.id), t=h.target||1, p=Math.min(n/t,1), future=d>today;
+      if(!future){counted++; if(n>=t)hit++}
+      const deg=Math.round(p*360);
+      const bg=future?"transparent":p>=1?h.color:`conic-gradient(${h.color} ${deg}deg, var(--track) 0)`;
+      const border=future?`2px dashed var(--line)`:"none";
+      html+=`<td><span class="dot" title="${n}/${t}" style="background:${bg};border:${border}"></span></td>`;
+    });
+    html+=`<td class="pct">${counted?Math.round(hit/counted*100)+"%":""}</td></tr>`;
+  });
+  $("weekTable").innerHTML=html+"</tbody>";
+}
+
+/* tap = +1, long-press = -1 */
+function bindPress(el,onTap,onHold){
+  let timer=null, held=false;
+  const start=e=>{held=false;timer=setTimeout(()=>{held=true;onHold();if(navigator.vibrate)navigator.vibrate(15)},500)};
+  const end=()=>{clearTimeout(timer)};
+  el.addEventListener("pointerdown",start);
+  el.addEventListener("pointerup",end); el.addEventListener("pointerleave",end); el.addEventListener("pointercancel",end);
+  el.addEventListener("click",e=>{if(held){e.preventDefault();return}onTap()});
+  el.addEventListener("contextmenu",e=>e.preventDefault());
+}
+
+function bump(id,delta){
+  const dk=key(viewDate);
+  state.log[dk]=state.log[dk]||{};
+  const n=Math.max(0,(state.log[dk][id]||0)+delta);
+  if(n===0)delete state.log[dk][id]; else state.log[dk][id]=n;
+  if(!Object.keys(state.log[dk]).length)delete state.log[dk];
+  persist(); render();
+}
+let armed=null, armTimer=null;
+function removeHabit(id,btn){
+  const h=state.habits.find(x=>x.id===id); if(!h)return;
+  if(armed!==id){armed=id;btn.textContent="Delete?";btn.classList.add("armed");
+    clearTimeout(armTimer);armTimer=setTimeout(()=>{armed=null;render()},3000);return}
+  armed=null;clearTimeout(armTimer);
+  state.habits=state.habits.filter(x=>x.id!==id);
+  Object.values(state.log).forEach(day=>delete day[id]);
+  const hadIcon=!!icons[id]; delete icons[id];
+  persist(hadIcon); render();
+}
+
+/* ---------- dialog ---------- */
+function paintSwatches(){
+  $("swatches").innerHTML="";
+  COLORS.forEach(c=>{
+    const b=document.createElement("button"); b.type="button"; b.className="sw"; b.style.background=c;
+    b.setAttribute("aria-label","Color "+c); b.setAttribute("aria-pressed",String(c===draftColor));
+    b.onclick=()=>{draftColor=c;paintSwatches();paintPreview()};
+    $("swatches").appendChild(b);
+  });
+}
+function paintPreview(){
+  const p=$("preview"); p.style.background=tint(draftColor,.2);
+  p.innerHTML=draftImg?`<img src="${draftImg}" alt="">`:escapeHTML($("fEmoji").value||"✨");
+}
+function openDialog(id){
+  editId=id; const h=id?state.habits.find(x=>x.id===id):null;
+  $("dlgTitle").textContent=h?"Edit habit":"New habit";
+  $("fName").value=h?h.name:""; $("fTarget").value=h?h.target:1; $("fEmoji").value=h?(h.emoji||"✨"):"✨";
+  draftColor=h?h.color:COLORS[state.habits.length%COLORS.length]; draftImg=h?(icons[h.id]||null):null;
+  paintSwatches(); paintPreview(); $("dlg").showModal();
+}
+$("fEmoji").oninput=()=>{draftImg=null;paintPreview()};
+$("pickImg").onclick=()=>$("fImg").click();
+$("fImg").onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const img=new Image(), url=URL.createObjectURL(f);
+  img.onload=()=>{
+    const S=120, cv=document.createElement("canvas"); cv.width=cv.height=S;
+    const s=Math.min(img.width,img.height), ctx=cv.getContext("2d");
+    ctx.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,S,S);
+    draftImg=cv.toDataURL("image/jpeg",.8); URL.revokeObjectURL(url); paintPreview();
+  };
+  img.src=url; e.target.value="";
+};
+$("cancel").onclick=()=>$("dlg").close();
+function saveHabit(){
+  const name=$("fName").value.trim();
+  if(!name){$("fErr").style.display="block";$("fName").focus();return}
+  $("fErr").style.display="none";
+  const target=Math.max(1,Math.min(30,parseInt($("fTarget").value)||1));
+  const emoji=$("fEmoji").value||"✨";
+  let id=editId;
+  if(id){Object.assign(state.habits.find(x=>x.id===id),{name,target,emoji,color:draftColor})}
+  else{id=uid();state.habits.push({id,name,target,emoji,color:draftColor})}
+  const before=icons[id]||null;
+  if(draftImg)icons[id]=draftImg; else delete icons[id];
+  persist(before!==(icons[id]||null)); $("dlg").close(); render();
+}
+$("save").onclick=saveHabit;
+$("fName").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveHabit()}});
+$("fTarget").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveHabit()}});
+
+$("prev").onclick=()=>{viewDate=addDays(viewDate,-1);render()};
+$("next").onclick=()=>{viewDate=addDays(viewDate,1);render()};
+$("editBtn").onclick=()=>{editing=!editing;render()};
+
+/* roll over to the new day if the page stays open past midnight */
+let lastDay=key(new Date());
+setInterval(()=>{const k=key(new Date());if(k!==lastDay){if(key(viewDate)===lastDay)viewDate=startOfDay(new Date());lastDay=k;render()}},60000);
+
+render();
+})();
+</script>
+</body>
+</html>

@@ -93,9 +93,22 @@ input[type=text],input[type=number]{width:100%;padding:10px 12px;border-radius:1
 .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
 .sync{font-size:.75rem;color:var(--muted);text-align:center;margin-top:16px}
 @media (prefers-reduced-motion: reduce){.ring .prog,.inner{transition:none}.editing .ring{animation:none}}
-.sync-row{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:16px}
+.nav{display:flex;align-items:center;gap:6px}
+[hidden]{display:none!important}
+.nav .icon-btn{width:30px;height:30px;font-size:1rem}
+.hist{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.hcard{background:var(--surface);border-radius:20px;padding:14px}
+.hcard h4{margin:0 0 8px;font-weight:500;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:10px;text-align:center}
+.stats b{display:block;font-size:1rem;font-weight:600}
+.stats small{font-size:.66rem;color:var(--muted)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal i{aspect-ratio:1;border-radius:6px;display:block;font-style:normal}
+.cal .hd{aspect-ratio:auto;font-size:.62rem;color:var(--muted);text-align:center}
+textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:12px/1.4 ui-monospace,Menlo,monospace;padding:8px}
+.sync-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:10px;margin-top:16px}
 .sync-row .sync{margin:0}
-#syncBtn{display:none;font-size:.8rem;padding:5px 12px}
+#syncBtn{font-size:.8rem;padding:5px 12px}
 .code{font-family:inherit;font-size:1.05rem;letter-spacing:.04em;text-align:center}
 .note{font-size:.82rem;color:var(--muted);margin:8px 0 0;line-height:1.4}
 </style>
@@ -117,14 +130,14 @@ window.FIREBASE_CONFIG = {
 </script>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="mainView">
   <header>
     <div class="day">
       <button class="icon-btn" id="prev" aria-label="Previous day">‹</button>
       <h1 id="dayLabel">Today</h1>
       <button class="icon-btn" id="next" aria-label="Next day">›</button>
     </div>
-    <button class="text-btn" id="editBtn">Edit</button>
+    <div class="nav"><button class="text-btn" id="histBtn">History</button><button class="text-btn" id="editBtn">Edit</button></div>
   </header>
 
   <section id="circles" class="circles" aria-label="Habits"></section>
@@ -134,6 +147,31 @@ window.FIREBASE_CONFIG = {
   <div class="week"><table id="weekTable"></table></div>
   <div class="sync-row"><p class="sync" id="sync"></p><button class="text-btn" id="syncBtn">Sync settings</button></div>
 </div>
+
+<div class="wrap" id="histView" hidden>
+  <header>
+    <button class="text-btn" id="backBtn">‹ Back</button>
+    <div class="nav">
+      <button class="icon-btn" id="mPrev" aria-label="Previous month">‹</button>
+      <h1 id="monthLabel" style="font-size:1.2rem;font-weight:600;margin:0;min-width:8.5em;text-align:center"></h1>
+      <button class="icon-btn" id="mNext" aria-label="Next month">›</button>
+    </div>
+    <button class="text-btn" id="exportBtn">Export</button>
+  </header>
+  <div class="hist" id="hist"></div>
+  <p class="hint">Each square is a day. Full color means you hit that day's target; lighter means partway.</p>
+</div>
+
+<dialog id="expDlg">
+  <h3>Export data</h3>
+  <p class="note" style="margin-top:0">Copy this and paste it into a chat to have your habits analyzed. Picture icons aren't included.</p>
+  <textarea id="expText" readonly></textarea>
+  <p class="note" id="expMsg"></p>
+  <div class="actions">
+    <button type="button" class="text-btn" id="expClose">Close</button>
+    <button type="button" class="primary" id="expCopy">Copy</button>
+  </div>
+</dialog>
 
 <dialog id="syncDlg">
   <h3>Sync</h3>
@@ -252,6 +290,7 @@ function rememberCode(code){
   try{history.replaceState(null,"",location.pathname+location.search+"#c="+code)}catch(e){}
 }
 function fbDocs(code){const col=fs.collection("trackers");return [col.doc(code),col.doc(code+"-icons")]}
+let syncProblem="";
 (async function connect(){
   const cfg=window.FIREBASE_CONFIG;
   if(cfg&&cfg.apiKey&&window.firebase){
@@ -262,10 +301,12 @@ function fbDocs(code){const col=fs.collection("trackers");return [col.doc(code),
       if(!code){try{code=localStorage.getItem(LSC)}catch(e){}}
       if(!code)code=newCode();
       rememberCode(code);
-      syncedMsg="Synced"; $("syncBtn").style.display="inline-block";
+      syncedMsg="Synced";
       attach(...fbDocs(code)); return;
-    }catch(e){console.error(e)}
-  }
+    }catch(e){console.error(e); syncProblem="Firebase error: "+(e&&e.message||e)}
+  }else if(!cfg||!cfg.apiKey){syncProblem="no Firebase config in the file"}
+  else{syncProblem="Firebase didn't load (offline, or blocked by an ad blocker)"}
+  setSync("Not synced: "+syncProblem);
   if(!window.claude||!window.claude.use)return;
   let db=null; try{db=await window.claude.use("db")}catch(e){}
   if(!db)return;
@@ -273,7 +314,10 @@ function fbDocs(code){const col=fs.collection("trackers");return [col.doc(code),
 })();
 $("syncBtn").onclick=()=>{
   let c="";try{c=localStorage.getItem(LSC)||""}catch(e){}
-  $("myCode").value=c; $("myLink").value=c?personalLink(c):""; $("joinCode").value=""; $("joinErr").style.display="none"; $("syncDlg").showModal();
+  $("myCode").value=c; $("myLink").value=c?personalLink(c):""; $("joinCode").value="";
+  if(!fs){$("joinErr").textContent="Sync isn't connected on this device: "+(syncProblem||"unknown problem")+". Your taps are only being saved here for now.";$("joinErr").style.display="block"}
+  else $("joinErr").style.display="none";
+  $("syncDlg").showModal();
 };
 $("myCode").onfocus=e=>e.target.select();
 $("myLink").onfocus=e=>e.target.select();
@@ -282,6 +326,7 @@ $("joinBtn").onclick=async()=>{
   const code=$("joinCode").value.trim().toLowerCase().replace(/\s+/g,"");
   const err=t=>{$("joinErr").textContent=t;$("joinErr").style.display="block"};
   if(!/^[a-z0-9]{4}(-[a-z0-9]{4}){5}$/.test(code))return err("That doesn't look like a sync code. It should be six groups of four characters.");
+  if(!fs)return err("Sync isn't connected on this device: "+(syncProblem||"unknown problem")+".");
   $("joinBtn").disabled=true;
   try{
     const [sDoc,iDoc]=fbDocs(code);
@@ -348,8 +393,49 @@ function render(){
   }
   $("hint").textContent=editing?"Tap a circle to change it. Tap × twice to delete it.":"Tap a circle to log it. Press and hold to undo one.";
   renderWeek(today);
+  renderHistory(today);
 }
 
+let histMonth=new Date(viewDate.getFullYear(),viewDate.getMonth(),1);
+function done(dk,h){return count(dk,h.id)>=(h.target||1)}
+function firstDay(h){let f=null;for(const dk in state.log){if(state.log[dk][h.id]&&(!f||dk<f))f=dk}return f}
+function parseKey(k){const [y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)}
+function streaks(h,today){
+  const f=firstDay(h); if(!f)return {cur:0,best:0};
+  let best=0,run=0;
+  for(let d=parseKey(f);d<=today;d=addDays(d,1)){if(done(key(d),h)){run++;if(run>best)best=run}else run=0}
+  let cur=0,d=today; if(!done(key(d),h))d=addDays(d,-1);
+  while(done(key(d),h)){cur++;d=addDays(d,-1)}
+  return {cur,best};
+}
+function renderHistory(today){
+  const y=histMonth.getFullYear(), mo=histMonth.getMonth();
+  $("monthLabel").textContent=histMonth.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  $("mNext").disabled=(y>today.getFullYear())||(y===today.getFullYear()&&mo>=today.getMonth());
+  const dim=new Date(y,mo+1,0).getDate(), lead=(new Date(y,mo,1).getDay()+6)%7;
+  const box=$("hist"); box.innerHTML="";
+  if(!state.habits.length){box.innerHTML='<p class="hint" style="grid-column:1/-1">Add a habit to start building history.</p>';return}
+  state.habits.forEach(h=>{
+    const f=firstDay(h), t=h.target||1; let hit=0,elig=0,taps=0;
+    let cells=["M","T","W","T","F","S","S"].map(x=>`<i class="hd">${x}</i>`).join("")+"<i></i>".repeat(lead);
+    for(let day=1;day<=dim;day++){
+      const d=new Date(y,mo,day), dk=key(d), n=count(dk,h.id), p=Math.min(n/t,1); taps+=n;
+      const future=d>today;
+      if(!future&&f&&dk>=f){elig++;if(n>=t)hit++}
+      const bg=future?"transparent":p>=1?h.color:p>0?`color-mix(in srgb, ${h.color} ${Math.round(25+p*45)}%, var(--track))`:"var(--track)";
+      const ring=key(d)===key(today)?`;box-shadow:inset 0 0 0 2px var(--ink)`:"";
+      cells+=`<i title="${d.toLocaleDateString()}: ${n}/${t}" style="background:${bg}${future?";border:1px dashed var(--line)":""}${ring}"></i>`;
+    }
+    const st=streaks(h,today);
+    const el=document.createElement("div"); el.className="hcard";
+    el.innerHTML=`<h4>${escapeHTML(h.emoji||"")} ${escapeHTML(h.name)}</h4>
+      <div class="stats"><div><b>${elig?Math.round(hit/elig*100)+"%":"–"}</b><small>month</small></div>
+      <div><b>${st.cur}</b><small>streak</small></div><div><b>${st.best}</b><small>best</small></div>
+      <div><b>${taps}</b><small>taps</small></div></div>
+      <div class="cal">${cells}</div>`;
+    box.appendChild(el);
+  });
+}
 function renderWeek(today){
   const m=monday(viewDate), days=[...Array(7)].map((_,i)=>addDays(m,i));
   $("weekLabel").textContent=days[0].toLocaleDateString(undefined,{month:"short",day:"numeric"})+" – "+days[6].toLocaleDateString(undefined,{month:"short",day:"numeric"});
@@ -454,6 +540,27 @@ $("fName").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault()
 $("fTarget").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveHabit()}});
 
 $("prev").onclick=()=>{viewDate=addDays(viewDate,-1);render()};
+function showHistory(on){
+  $("mainView").hidden=on; $("histView").hidden=!on;
+  if(on){const t=startOfDay(new Date());histMonth=new Date(t.getFullYear(),t.getMonth(),1);editing=false;render()}
+  window.scrollTo(0,0);
+}
+$("histBtn").onclick=()=>showHistory(true);
+$("backBtn").onclick=()=>showHistory(false);
+$("mPrev").onclick=()=>{histMonth=new Date(histMonth.getFullYear(),histMonth.getMonth()-1,1);render()};
+$("mNext").onclick=()=>{histMonth=new Date(histMonth.getFullYear(),histMonth.getMonth()+1,1);render()};
+$("exportBtn").onclick=()=>{
+  const out={exported:key(new Date()),habits:state.habits.map(h=>({name:h.name,emoji:h.emoji,targetPerDay:h.target})),
+    log:Object.keys(state.log).sort().map(dk=>{const row={date:dk};state.habits.forEach(h=>{const n=count(dk,h.id);if(n)row[h.name]=n});return row})};
+  $("expText").value=JSON.stringify(out,null,1); $("expMsg").textContent=""; $("expDlg").showModal();
+};
+$("expText").onfocus=e=>e.target.select();
+$("expClose").onclick=()=>$("expDlg").close();
+$("expCopy").onclick=async()=>{
+  const t=$("expText"); t.focus(); t.select();
+  try{await navigator.clipboard.writeText(t.value);$("expMsg").textContent="Copied."}
+  catch(e){try{document.execCommand("copy");$("expMsg").textContent="Copied."}catch(_){$("expMsg").textContent="Press Cmd+C (or long-press → Copy) to copy the selected text."}}
+};
 $("next").onclick=()=>{viewDate=addDays(viewDate,1);render()};
 $("editBtn").onclick=()=>{editing=!editing;render()};
 
